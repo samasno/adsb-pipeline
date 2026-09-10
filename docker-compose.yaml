@@ -1,0 +1,30 @@
+services:
+
+  mock-adsb:
+    build:
+      context: .
+      dockerfile: go.Dockerfile
+      args: 
+        SERVICE: mock-server
+    ports:
+      - "30003:30003"
+  nats:
+    image: nats:2.14-alpine
+    command: ["-js"]
+    ports:
+      - "4222:4222"
+
+  ingestion:
+    build:
+      context: .
+      dockerfile: go.Dockerfile
+      args:
+        SERVICE: ingest
+    depends_on:
+      - nats
+      - mock-adsb
+    environment:
+      - NATS_URL=nats://nats:4222
+      - NATS_STREAM_NAME=adsb
+      - NATS_SUBJECT=adsb.sbs1
+      - ADSB_SOURCE=mock-adsb:30003
