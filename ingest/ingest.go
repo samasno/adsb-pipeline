@@ -9,6 +9,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -80,13 +81,14 @@ func (w *SBSIngestWorker) Error() chan error {
 }
 
 type PositionEvent struct {
-	ICAO      string   `json:"icao"`
-	Callsign  *string  `json:"call_sign"`
-	Altitude  *int     `json:"altitude"`
-	Latitude  *float64 `json:"latitude"`
-	Longitude *float64 `json:"longitude"`
-	Speed     *float64 `json:"speed"`
-	Track     *float64 `json:"track"`
+	ICAO        string   `json:"icao"`
+	Callsign    *string  `json:"call_sign"` // use pointers to distinguish 0 values
+	Altitude    *int     `json:"altitude"`
+	Latitude    *float64 `json:"latitude"`
+	Longitude   *float64 `json:"longitude"`
+	Speed       *float64 `json:"speed"`
+	Track       *float64 `json:"track"`
+	DateTimeUTC *int64   `json:"timestamp"`
 }
 
 func ParseSBSMessage(line string) (*PositionEvent, error) {
@@ -96,13 +98,14 @@ func ParseSBSMessage(line string) (*PositionEvent, error) {
 	}
 
 	return &PositionEvent{
-		ICAO:      fields[4],
-		Callsign:  nonEmpty(fields[10]),
-		Altitude:  parseIntPtr(fields[11]),
-		Speed:     parseFloatPtr(fields[12]),
-		Track:     parseFloatPtr(fields[13]),
-		Latitude:  parseFloatPtr(fields[14]),
-		Longitude: parseFloatPtr(fields[15]),
+		ICAO:        fields[4],
+		Callsign:    nonEmpty(fields[10]),
+		Altitude:    parseIntPtr(fields[11]),
+		Speed:       parseFloatPtr(fields[12]),
+		Track:       parseFloatPtr(fields[13]),
+		Latitude:    parseFloatPtr(fields[14]),
+		Longitude:   parseFloatPtr(fields[15]),
+		DateTimeUTC: generateTimestamp(fields[8], fields[7]),
 	}, nil
 }
 
@@ -133,4 +136,24 @@ func parseFloatPtr(s string) *float64 {
 		return nil
 	}
 	return &v
+}
+
+func generateTimestamp(sbsDate string, sbsTime string) *int64 {
+	var ts int64
+	if sbsDate == "" || sbsTime == "" {
+		ts = time.Now().UnixMilli()
+		return &ts
+	}
+
+	layout := "2006/01/02 15:04:05.000"
+
+	str := sbsDate + " " + sbsTime
+	parsed, err := time.Parse(layout, str)
+	if err != nil {
+		ts = time.Now().UnixMilli()
+		return &ts
+	}
+
+	ts = parsed.UnixMilli()
+	return &ts
 }
