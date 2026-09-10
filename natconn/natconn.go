@@ -41,3 +41,7 @@ func FetchStream(ctx context.Context, js jetstream.JetStream, conf *jetstream.St
 	stream, err = js.CreateStream(ctx, *conf)
 	return stream, err
 }
+
+func NewConsumer(ctx context.Context, stream jetstream.Stream, conf jetstream.ConsumerConfig) (jetstream.Consumer, error) {
+	return stream.CreateOrUpdateConsumer(ctx, conf)
+}
