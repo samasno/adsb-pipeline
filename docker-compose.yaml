@@ -6,6 +6,7 @@ services:
       dockerfile: go.Dockerfile
       args: 
         SERVICE: mock-server
+    restart: on-failure 
     ports:
       - "30003:30003"
   nats:
@@ -14,12 +15,44 @@ services:
     ports:
       - "4222:4222"
 
+  timescaledb:
+    image: timescale/timescaledb-ha:pg18
+    ports:
+      - "5432:5432"
+    restart: on-failure 
+    volumes:
+      - timescaledb:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=adsb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d adsb"]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 15
+
+  migrate-timescaledb:
+    depends_on: 
+      timescaledb:
+        condition: service_healthy
+    image: migrate/migrate
+    restart: on-failure 
+    volumes:
+      - ./migrations/timescaledb:/migrations
+    command: [
+      "-path", "/migrations",
+      "-database", "postgres://postgres:postgres@timescaledb:5432/adsb?sslmode=disable",
+      "up"
+    ]
+
   ingestion:
     build:
       context: .
       dockerfile: go.Dockerfile
       args:
         SERVICE: ingest
+    restart: on-failure 
     depends_on:
       - nats
       - mock-adsb
@@ -28,3 +61,24 @@ services:
       - NATS_STREAM_NAME=adsb
       - NATS_SUBJECT=adsb.sbs1
       - ADSB_SOURCE=mock-adsb:30003
+
+  sbs-write-consumer:
+    build:
+      context: .
+      dockerfile: go.Dockerfile
+      args:
+        SERVICE: write-consumer
+    restart: on-failure      
+    depends_on:
+      migrate-timescaledb:
+        condition: service_completed_successfully
+      nats:
+        condition: service_started
+    environment:
+      - NATS_URL=nats://nats:4222
+      - NATS_STREAM_NAME=adsb
+      - NATS_SUBJECT=adsb.sbs1
+      - TIMESCALEDB_URL=postgres://postgres:postgres@timescaledb:5432/adsb?sslmode=disable
+
+volumes:
+  timescaledb:

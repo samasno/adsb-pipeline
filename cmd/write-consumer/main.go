@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
-	"github.com/samasno/adsb-pipeline/ingest"
+	"github.com/samasno/adsb-pipeline/consume"
 	"github.com/samasno/adsb-pipeline/natconn"
 )
 
@@ -29,12 +29,7 @@ func main() {
 		subject = "adsb.sbs1"
 	}
 
-	sourceUrl := os.Getenv("ADSB_SOURCE")
-	if sourceUrl == "" {
-		sourceUrl = "127.0.0.1:30003"
-	}
-
-	conf := jetstream.StreamConfig{
+	streamConf := jetstream.StreamConfig{
 		Name:     streamName,
 		Subjects: []string{subject},
 	}
@@ -48,7 +43,7 @@ func main() {
 	}
 	defer nc.Close()
 
-	_, err = natconn.FetchStream(ctx, js, &conf)
+	stream, err := natconn.FetchStream(ctx, js, &streamConf)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -59,14 +54,24 @@ func main() {
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
 
-	worker := ingest.SBSIngest(ctx, sourceUrl, js, subject)
+	consumerConf := jetstream.ConsumerConfig{
+		Durable:       "sbs-writer",
+		Description:   "writes sbs data to timescaledb",
+		AckPolicy:     jetstream.AckExplicitPolicy,
+		FilterSubject: subject,
+		AckWait:       time.Second * 2,
+	}
 
-	select {
-	case <-shutdown:
-		cancel()
-		log.Println("worker closed")
-		os.Exit(0)
-	case err = <-worker.Error():
+	consumer, err := consume.NewSBSTimescaleConsumer(ctx, stream, consumerConf)
+	if err != nil {
 		log.Fatal(err)
 	}
+
+	cc, err := consumer.Consume()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	<-shutdown
+	cc.Stop()
 }

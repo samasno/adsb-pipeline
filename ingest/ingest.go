@@ -4,14 +4,13 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
-	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -81,47 +80,15 @@ func (w *SBSIngestWorker) Error() chan error {
 	return w.errc
 }
 
-func ConnectNats(ctx context.Context, natsaddr string) (*nats.Conn, jetstream.JetStream, error) {
-	nc, err := nats.Connect(natsaddr)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	js, err := jetstream.New(nc)
-	if err != nil {
-		defer nc.Close()
-		return nil, nil, err
-	}
-
-	return nc, js, nil
-}
-
-func FetchStream(ctx context.Context, js jetstream.JetStream, conf *jetstream.StreamConfig) (jetstream.Stream, error) {
-	if conf == nil {
-		return nil, fmt.Errorf("stream config required")
-	}
-
-	stream, err := js.Stream(ctx, conf.Name)
-	if err != nil && !errors.Is(err, jetstream.ErrStreamNotFound) {
-		return nil, err
-	}
-
-	if err == nil {
-		return stream, nil
-	}
-
-	stream, err = js.CreateStream(ctx, *conf)
-	return stream, err
-}
-
 type PositionEvent struct {
-	ICAO      string   `json:"icao"`
-	Callsign  *string  `json:"call_sign"`
-	Altitude  *int     `json:"altitude"`
-	Latitude  *float64 `json:"latitude"`
-	Longitude *float64 `json:"longitude"`
-	Speed     *float64 `json:"speed"`
-	Track     *float64 `json:"track"`
+	ICAO        string   `json:"icao"`
+	Callsign    *string  `json:"call_sign"` // use pointers to distinguish 0 values
+	Altitude    *int     `json:"altitude"`
+	Latitude    *float64 `json:"latitude"`
+	Longitude   *float64 `json:"longitude"`
+	Speed       *float64 `json:"speed"`
+	Track       *float64 `json:"track"`
+	DateTimeUTC *int64   `json:"timestamp"`
 }
 
 func ParseSBSMessage(line string) (*PositionEvent, error) {
@@ -131,13 +98,14 @@ func ParseSBSMessage(line string) (*PositionEvent, error) {
 	}
 
 	return &PositionEvent{
-		ICAO:      fields[4],
-		Callsign:  nonEmpty(fields[10]),
-		Altitude:  parseIntPtr(fields[11]),
-		Speed:     parseFloatPtr(fields[12]),
-		Track:     parseFloatPtr(fields[13]),
-		Latitude:  parseFloatPtr(fields[14]),
-		Longitude: parseFloatPtr(fields[15]),
+		ICAO:        fields[4],
+		Callsign:    nonEmpty(fields[10]),
+		Altitude:    parseIntPtr(fields[11]),
+		Speed:       parseFloatPtr(fields[12]),
+		Track:       parseFloatPtr(fields[13]),
+		Latitude:    parseFloatPtr(fields[14]),
+		Longitude:   parseFloatPtr(fields[15]),
+		DateTimeUTC: generateTimestamp(fields[8], fields[7]),
 	}, nil
 }
 
@@ -168,4 +136,24 @@ func parseFloatPtr(s string) *float64 {
 		return nil
 	}
 	return &v
+}
+
+func generateTimestamp(sbsDate string, sbsTime string) *int64 {
+	var ts int64
+	if sbsDate == "" || sbsTime == "" {
+		ts = time.Now().UnixMilli()
+		return &ts
+	}
+
+	layout := "2006/01/02 15:04:05.000"
+
+	str := sbsDate + " " + sbsTime
+	parsed, err := time.Parse(layout, str)
+	if err != nil {
+		ts = time.Now().UnixMilli()
+		return &ts
+	}
+
+	ts = parsed.UnixMilli()
+	return &ts
 }
