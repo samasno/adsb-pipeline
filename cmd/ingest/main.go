@@ -10,6 +10,7 @@ import (
 
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/samasno/adsb-pipeline/ingest"
+	"github.com/samasno/adsb-pipeline/natconn"
 )
 
 func main() {
@@ -41,13 +42,13 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	nc, js, err := ingest.ConnectNats(ctx, natsUrl)
+	nc, js, err := natconn.ConnectNats(ctx, natsUrl)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 	defer nc.Close()
 
-	_, err = ingest.FetchStream(ctx, js, &conf)
+	_, err = natconn.FetchStream(ctx, js, &conf)
 	if err != nil {
 		log.Fatal(err)
 	}

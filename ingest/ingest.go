@@ -4,14 +4,12 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net"
 	"strconv"
 	"strings"
 
-	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -79,39 +77,6 @@ func (w *SBSIngestWorker) sbsIngest() {
 
 func (w *SBSIngestWorker) Error() chan error {
 	return w.errc
-}
-
-func ConnectNats(ctx context.Context, natsaddr string) (*nats.Conn, jetstream.JetStream, error) {
-	nc, err := nats.Connect(natsaddr)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	js, err := jetstream.New(nc)
-	if err != nil {
-		defer nc.Close()
-		return nil, nil, err
-	}
-
-	return nc, js, nil
-}
-
-func FetchStream(ctx context.Context, js jetstream.JetStream, conf *jetstream.StreamConfig) (jetstream.Stream, error) {
-	if conf == nil {
-		return nil, fmt.Errorf("stream config required")
-	}
-
-	stream, err := js.Stream(ctx, conf.Name)
-	if err != nil && !errors.Is(err, jetstream.ErrStreamNotFound) {
-		return nil, err
-	}
-
-	if err == nil {
-		return stream, nil
-	}
-
-	stream, err = js.CreateStream(ctx, *conf)
-	return stream, err
 }
 
 type PositionEvent struct {
