@@ -59,6 +59,8 @@ func newServer(addr string, conf sConfig) (*server, error) {
 		return nil, err
 	}
 
+	log.Println("mock adsb listening at ", lis.Addr().String())
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	s := &server{
@@ -78,6 +80,7 @@ func newServer(addr string, conf sConfig) (*server, error) {
 }
 
 func (s *server) listen() {
+	log.Println("mock adsb serving")
 	for {
 		conn, err := s.lis.Accept()
 		if errors.Is(err, net.ErrClosed) {
@@ -96,6 +99,7 @@ func (s *server) listen() {
 			conn.Close()
 			return
 		}
+		log.Printf("accepted connection from %s\n", conn.RemoteAddr().String())
 
 		for _, plane := range s.planes {
 			go s.handleConn(plane, conn)
