@@ -20,7 +20,9 @@ import (
 type SBSWriteWorker struct {
 	db       *sql.DB
 	consumer jetstream.Consumer
+	cc       jetstream.ConsumeContext
 	ctx      context.Context
+	cancel   context.CancelFunc
 }
 
 const SBSWriterName = "sbs-writer"
@@ -42,21 +44,28 @@ func NewSBSTimescaleConsumer(ctx context.Context, stream jetstream.Stream, conf 
 		return nil, err
 	}
 
+	ctx, cancel := context.WithCancel(ctx)
+
 	c := &SBSWriteWorker{
 		db:       db,
 		consumer: consumer,
 		ctx:      ctx,
+		cancel:   cancel,
 	}
 
 	return c, nil
 }
 
-func (c *SBSWriteWorker) Consume() (jetstream.ConsumeContext, error) {
-	cc, err := c.consumer.Consume(c.consumeOne)
-	if err != nil {
-		return nil, err
-	}
-	return cc, nil
+func (c *SBSWriteWorker) Consume() error {
+	var err error
+	c.cc, err = c.consumer.Consume(c.consumeOne)
+	return err
+}
+
+func (c *SBSWriteWorker) Stop() {
+	c.cancel()
+	c.cc.Stop()
+	c.db.Close()
 }
 
 func (c *SBSWriteWorker) consumeOne(msg jetstream.Msg) {

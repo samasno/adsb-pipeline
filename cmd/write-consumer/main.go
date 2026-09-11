@@ -67,11 +67,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	cc, err := consumer.Consume()
+	err = consumer.Consume()
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	<-shutdown
-	cc.Stop()
+	consumer.Stop()
 }
