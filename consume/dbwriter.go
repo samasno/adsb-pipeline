@@ -21,9 +21,6 @@ type SBSWriteWorker struct {
 	db *sql.DB
 }
 
-const SBSWriterName = "sbs-writer"
-const ConsumerFetchWait = time.Second * 3
-
 func NewSBSTimescaleConsumer(ctx context.Context, stream jetstream.Stream, conf jetstream.ConsumerConfig) (*SBSWriteWorker, error) {
 	if stream == nil {
 		return nil, fmt.Errorf("jetstream instance required")
@@ -34,32 +31,33 @@ func NewSBSTimescaleConsumer(ctx context.Context, stream jetstream.Stream, conf 
 		return nil, err
 	}
 
-	consumer, err := NewConsumer(ctx, stream, conf)
+	c := &SBSWriteWorker{
+		db: db,
+	}
+
+	consumer, err := NewConsumer(ctx, stream, conf, c.Callback)
 	if err != nil {
 		defer db.Close()
 		return nil, err
 	}
 
-	c := &SBSWriteWorker{
-		Consumer: consumer,
-		db:       db,
-	}
+	c.Consumer = consumer
 
 	return c, nil
 }
 
 func (c *SBSWriteWorker) Stop() {
 	c.Consumer.Stop()
-
 	if c.db != nil {
 		c.db.Close()
 	}
 }
 
-func (c *SBSWriteWorker) consumeOne(msg jetstream.Msg) {
+func (c *SBSWriteWorker) Callback(msg jetstream.Msg) {
 	err := c.InsertPositionEvent(msg.Data())
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
+		println("pgerr")
 		log.Println(err)
 		switch pgErr.Code {
 		case "23502", "42P01":

@@ -13,9 +13,10 @@ type Consumer struct {
 	cc       jetstream.ConsumeContext
 	ctx      context.Context
 	cancel   context.CancelFunc
+	cb       func(jetstream.Msg)
 }
 
-func NewConsumer(ctx context.Context, stream jetstream.Stream, conf jetstream.ConsumerConfig) (*Consumer, error) {
+func NewConsumer(ctx context.Context, stream jetstream.Stream, conf jetstream.ConsumerConfig, cb func(jetstream.Msg)) (*Consumer, error) {
 	if stream == nil {
 		return nil, fmt.Errorf("jetstream instance required")
 	}
@@ -31,6 +32,7 @@ func NewConsumer(ctx context.Context, stream jetstream.Stream, conf jetstream.Co
 		consumer: consumer,
 		ctx:      ctx,
 		cancel:   cancel,
+		cb:       cb,
 	}
 
 	return c, nil
@@ -38,11 +40,9 @@ func NewConsumer(ctx context.Context, stream jetstream.Stream, conf jetstream.Co
 
 func (c *Consumer) Consume() error {
 	var err error
-	c.cc, err = c.consumer.Consume(c.consumeOne)
+	c.cc, err = c.consumer.Consume(c.cb)
 	return err
 }
-
-func (c *Consumer) consumeOne(msg jetstream.Msg) {}
 
 func (c *Consumer) Stop() {
 	if c.cancel != nil {
