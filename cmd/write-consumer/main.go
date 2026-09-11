@@ -57,6 +57,7 @@ func main() {
 	consumerConf := jetstream.ConsumerConfig{
 		Durable:       "sbs-writer",
 		Description:   "writes sbs data to timescaledb",
+		DeliverPolicy: jetstream.DeliverLastPolicy,
 		AckPolicy:     jetstream.AckExplicitPolicy,
 		FilterSubject: subject,
 		AckWait:       time.Second * 2,
