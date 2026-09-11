@@ -14,15 +14,11 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/samasno/adsb-pipeline/ingest"
-	"github.com/samasno/adsb-pipeline/natconn"
 )
 
 type SBSWriteWorker struct {
-	db       *sql.DB
-	consumer jetstream.Consumer
-	cc       jetstream.ConsumeContext
-	ctx      context.Context
-	cancel   context.CancelFunc
+	*Consumer
+	db *sql.DB
 }
 
 const SBSWriterName = "sbs-writer"
@@ -38,34 +34,26 @@ func NewSBSTimescaleConsumer(ctx context.Context, stream jetstream.Stream, conf 
 		return nil, err
 	}
 
-	consumer, err := natconn.NewConsumer(ctx, stream, conf)
+	consumer, err := NewConsumer(ctx, stream, conf)
 	if err != nil {
 		defer db.Close()
 		return nil, err
 	}
 
-	ctx, cancel := context.WithCancel(ctx)
-
 	c := &SBSWriteWorker{
+		Consumer: consumer,
 		db:       db,
-		consumer: consumer,
-		ctx:      ctx,
-		cancel:   cancel,
 	}
 
 	return c, nil
 }
 
-func (c *SBSWriteWorker) Consume() error {
-	var err error
-	c.cc, err = c.consumer.Consume(c.consumeOne)
-	return err
-}
-
 func (c *SBSWriteWorker) Stop() {
-	c.cancel()
-	c.cc.Stop()
-	c.db.Close()
+	c.Consumer.Stop()
+
+	if c.db != nil {
+		c.db.Close()
+	}
 }
 
 func (c *SBSWriteWorker) consumeOne(msg jetstream.Msg) {
