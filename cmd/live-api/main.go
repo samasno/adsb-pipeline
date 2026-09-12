@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,6 +12,7 @@ import (
 
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/samasno/adsb-pipeline/consume"
+	live_api "github.com/samasno/adsb-pipeline/live-api"
 	"github.com/samasno/adsb-pipeline/natconn"
 )
 
@@ -27,6 +30,11 @@ func main() {
 	subject := os.Getenv("NATS_SUBJECT")
 	if subject == "" {
 		subject = "adsb.sbs1"
+	}
+
+	srvAddr := os.Getenv("SERVER_ADDR")
+	if srvAddr == "" {
+		srvAddr = "0.0.0.0:8080"
 	}
 
 	streamConf := jetstream.StreamConfig{
@@ -55,15 +63,30 @@ func main() {
 	defer cancel()
 
 	consumerConf := jetstream.ConsumerConfig{
-		Durable:       "sbs-writer",
-		Description:   "writes sbs data to timescaledb",
-		DeliverPolicy: jetstream.DeliverLastPolicy,
+		Durable:       "sbs-live-updates",
+		Description:   "reads and pushes sbs updates through web sockets",
 		AckPolicy:     jetstream.AckExplicitPolicy,
+		DeliverPolicy: jetstream.DeliverLastPolicy,
 		FilterSubject: subject,
 		AckWait:       time.Second * 2,
 	}
 
-	consumer, err := consume.NewSBSTimescaleConsumer(ctx, stream, consumerConf)
+	liveApi := live_api.NewLiveApiHandler()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	srv := http.Server{Addr: srvAddr}
+	go func() {
+		http.HandleFunc("GET /sbs", liveApi.HandleWS)
+		http.Handle("GET /", live_api.Static())
+		err := srv.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Println(err)
+		}
+	}()
+
+	consumer, err := consume.NewLiveApiConsumer(ctx, liveApi, stream, consumerConf)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -73,6 +96,9 @@ func main() {
 		log.Fatal(err)
 	}
 
+	log.Printf("sbs live server running at %s\n", srvAddr)
+
 	<-shutdown
 	consumer.Stop()
+	srv.Shutdown(ctx)
 }

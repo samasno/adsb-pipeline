@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Live Track View</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: monospace;
+  }
+  #status {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    font-size: 12px;
+    z-index: 1000;
+    background: rgba(0,0,0,0.6);
+    color: #cfd8dc;
+    padding: 4px 8px;
+    border-radius: 4px;
+  }
+  #map {
+    height: 100%;
+    width: 100%;
+    background: #0b0f14;
+  }
+</style>
+</head>
+<body>
+  <div id="status">connecting...</div>
+  <div id="map"></div>
+ 
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
