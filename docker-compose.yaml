@@ -52,7 +52,7 @@ services:
       dockerfile: go.Dockerfile
       args:
         SERVICE: ingest
-    restart: on-failure 
+    restart: always 
     depends_on:
       - nats
       - mock-adsb
@@ -68,7 +68,7 @@ services:
       dockerfile: go.Dockerfile
       args:
         SERVICE: write-consumer
-    restart: on-failure      
+    restart: always      
     depends_on:
       migrate-timescaledb:
         condition: service_completed_successfully
@@ -79,6 +79,23 @@ services:
       - NATS_STREAM_NAME=adsb
       - NATS_SUBJECT=adsb.sbs1
       - TIMESCALEDB_URL=postgres://postgres:postgres@timescaledb:5432/adsb?sslmode=disable
+
+  sbs-live-api:
+    build:
+      context: .
+      dockerfile: ./go.Dockerfile
+      args:
+        SERVICE: live-api
+    depends_on:
+      nats:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    environment:
+      - NATS_URL=nats://nats:4222
+      - NATS_STREAM_NAME=adsb
+      - NATS_SUBJECT=adsb.sbs1
+      - SERVER_ADDR=0.0.0.0:8080
 
 volumes:
   timescaledb:
