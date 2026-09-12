@@ -10,14 +10,24 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
 )
 
 func main() {
+	numPlanes := 10
+	numPlanesEnv := os.Getenv("NUM_PLANES")
+	if numPlanesEnv != "" {
+		n, err := strconv.Atoi(numPlanesEnv)
+		if err == nil {
+			numPlanes = n
+		}
+	}
+
 	conf := sConfig{
-		numPlanes: 1,
+		numPlanes: numPlanes,
 		radius:    1,
 		lat:       30.3119,
 		lon:       -95.4561,
@@ -131,7 +141,7 @@ func (s *server) newPlane(lat, lon, rad float64) *Plane {
 func (s *server) handleConn(plane *Plane, c net.Conn) {
 	defer c.Close()
 
-	t := time.NewTicker(time.Second * 1)
+	t := time.NewTicker(time.Second * 2)
 	defer t.Stop()
 
 	log.Printf("forwarding sbs from plane %s to connection at %s\n", plane.ICAO, c.RemoteAddr().String())
