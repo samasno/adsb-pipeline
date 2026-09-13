@@ -57,7 +57,6 @@ func (c *SBSWriteWorker) Callback(msg jetstream.Msg) {
 	err := c.InsertPositionEvent(msg.Data())
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
-		println("pgerr")
 		log.Println(err)
 		switch pgErr.Code {
 		case "23502", "42P01":
@@ -87,7 +86,7 @@ func (c *SBSWriteWorker) InsertPositionEvent(payload []byte) error {
 	_, err = c.db.ExecContext(
 		c.ctx,
 		`INSERT INTO positions (icao,ts,lat,lon,altitude) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING;`,
-		data.ICAO, time.UnixMilli(*data.DateTimeUTC), *data.Latitude, *data.Longitude, *data.Altitude,
+		data.ICAO, time.UnixMilli(*data.DateTimeUTC), data.Latitude, data.Longitude, data.Altitude,
 	)
 
 	return err
